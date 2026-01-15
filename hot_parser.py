@@ -18,7 +18,7 @@ import re
 
 
 # =============================================================================
-# RECORD TYPE DEFINITIONS
+# RECORD TYPE DEFINITIONS - DISH Revision 23
 # =============================================================================
 
 @dataclass
@@ -27,23 +27,25 @@ class RecordSpec:
     name: str
     start: int  # 1-indexed position
     length: int
-    data_type: str  # 'A' = Alpha, 'N' = Numeric, 'AN' = Alphanumeric
+    data_type: str  # 'A' = Alpha, 'N' = Numeric, 'AN' = Alphanumeric, 'S' = Signed Numeric
     description: str = ""
 
 
 # DISH HOT Record Specifications (136 bytes per record)
+# Based on DISH Revision 23 specification
 RECORD_SPECS = {
     # BFH01 - File Header
     'BFH01': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
         RecordSpec('bsp_code', 12, 2, 'A', 'BSP Country Code'),
-        RecordSpec('file_date', 14, 8, 'N', 'File Creation Date YYYYMMDD'),
-        RecordSpec('billing_period', 22, 8, 'N', 'Billing Period YYYYMMDD'),
-        RecordSpec('process_date', 30, 8, 'N', 'Processing Date YYYYMMDD'),
-        RecordSpec('dish_version', 38, 6, 'A', 'DISH Version'),
-        RecordSpec('file_type', 44, 4, 'A', 'File Type (PROD/TEST)'),
-        RecordSpec('filler', 48, 89, 'A', 'Filler'),
+        RecordSpec('file_date', 14, 6, 'N', 'File Creation Date YYMMDD'),
+        RecordSpec('billing_period', 20, 6, 'N', 'Billing Period YYMMDD'),
+        RecordSpec('process_date', 26, 6, 'N', 'Processing Date YYMMDD'),
+        RecordSpec('dish_version', 32, 5, 'AN', 'DISH Version'),
+        RecordSpec('file_type', 37, 4, 'A', 'File Type (PROD/TEST)'),
+        RecordSpec('airline_code', 41, 3, 'AN', 'Airline Code'),
+        RecordSpec('filler', 44, 93, 'A', 'Filler'),
     ],
 
     # BCH02 - Billing Analysis Header
@@ -51,11 +53,12 @@ RECORD_SPECS = {
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
         RecordSpec('airline_code', 12, 3, 'AN', 'Airline Numeric Code'),
-        RecordSpec('billing_period', 15, 6, 'N', 'Billing Period YYYYMM'),
-        RecordSpec('bsp_code', 21, 3, 'A', 'BSP Code'),
-        RecordSpec('currency', 24, 3, 'A', 'Currency Code'),
-        RecordSpec('billing_type', 27, 2, 'N', 'Billing Type'),
-        RecordSpec('filler', 29, 108, 'A', 'Filler'),
+        RecordSpec('billing_period', 15, 6, 'N', 'Billing Period YYMMDD'),
+        RecordSpec('bsp_code', 21, 2, 'A', 'BSP Code'),
+        RecordSpec('currency', 23, 3, 'A', 'Currency Code'),
+        RecordSpec('billing_type', 26, 2, 'AN', 'Billing Type'),
+        RecordSpec('remittance_period', 28, 3, 'N', 'Remittance Period'),
+        RecordSpec('filler', 31, 106, 'A', 'Filler'),
     ],
 
     # BOH03 - Office Header (Agent)
@@ -63,137 +66,124 @@ RECORD_SPECS = {
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
         RecordSpec('agent_iata_number', 12, 8, 'AN', 'Agent IATA Number'),
-        RecordSpec('agent_name', 28, 40, 'A', 'Agent Name'),
-        RecordSpec('agent_city', 68, 3, 'A', 'Agent City Code'),
-        RecordSpec('filler', 71, 66, 'A', 'Filler'),
+        RecordSpec('agent_check_digit', 20, 1, 'N', 'Check Digit'),
+        RecordSpec('agent_name', 21, 52, 'A', 'Agent Name'),
+        RecordSpec('agent_city', 73, 3, 'A', 'Agent City Code'),
+        RecordSpec('filler', 76, 61, 'A', 'Filler'),
     ],
 
     # BKT06 - Transaction Header
     'BKT06': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('transaction_code', 18, 4, 'A', 'Transaction Code'),
-        RecordSpec('airline_code', 22, 3, 'AN', 'Airline Numeric Code'),
-        RecordSpec('document_count', 25, 7, 'N', 'Document Count'),
-        RecordSpec('filler', 32, 105, 'A', 'Filler'),
+        RecordSpec('transaction_code', 12, 4, 'A', 'Transaction Code'),
+        RecordSpec('airline_code', 16, 3, 'AN', 'Airline Numeric Code'),
+        RecordSpec('document_count', 19, 6, 'N', 'Document Count'),
+        RecordSpec('filler', 25, 112, 'A', 'Filler'),
     ],
 
-    # BKS24 - Ticket/Document Identification
+    # BKS24 - Ticket/Document Identification (CORRECTED positions per DISH Rev 23)
     'BKS24': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
-        RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('document_number', 18, 14, 'AN', 'Ticket/Document Number'),
-        RecordSpec('transaction_code', 32, 4, 'A', 'Transaction Code (TKTT/RFND/EXCH)'),
-        RecordSpec('form_code', 36, 4, 'A', 'Form Code'),
-        RecordSpec('issue_date', 40, 6, 'N', 'Date of Issue YYMMDD'),
-        RecordSpec('original_issue_date', 46, 6, 'N', 'Original Issue Date YYMMDD'),
-        RecordSpec('issue_time', 52, 6, 'N', 'Time of Issue HHMMSS'),
-        RecordSpec('dom_int_indicator', 58, 1, 'A', 'Domestic/International (D/I)'),
-        RecordSpec('filler', 59, 78, 'A', 'Filler'),
+        RecordSpec('sequence_number', 6, 6, 'N', 'Transaction Sequence Number'),
+        RecordSpec('document_number', 12, 14, 'AN', 'Ticket/Document Number'),
+        RecordSpec('transaction_code', 26, 4, 'A', 'Transaction Code (TKTT/RFND/EXCH)'),
+        RecordSpec('form_code', 30, 4, 'A', 'Form Code'),
+        RecordSpec('issue_date', 34, 6, 'N', 'Date of Issue DDMMYY'),
+        RecordSpec('original_issue_date', 40, 6, 'N', 'Date of Original Document DDMMYY'),
+        RecordSpec('issue_time', 46, 6, 'N', 'Time of Issue HHMMSS'),
+        RecordSpec('dom_int_indicator', 52, 1, 'A', 'Domestic/International (D/I)'),
+        RecordSpec('tour_code', 53, 15, 'AN', 'Tour Code'),
+        RecordSpec('related_doc_number', 68, 14, 'AN', 'Related Document Number'),
+        RecordSpec('filler', 82, 55, 'A', 'Filler'),
     ],
 
     # BKS30 - STD/Document Amounts
     'BKS30': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('currency', 18, 3, 'A', 'Currency Code'),
-        RecordSpec('fare_amount', 21, 9, 'N', 'Fare Amount (with sign)'),
-        RecordSpec('equivalent_fare', 30, 9, 'N', 'Equivalent Fare Amount'),
-        RecordSpec('total_tax', 39, 9, 'N', 'Total Tax Amount'),
-        RecordSpec('penalty', 48, 9, 'N', 'Penalty Amount'),
-        RecordSpec('total_amount', 57, 9, 'N', 'Total Document Amount (with sign)'),
-        RecordSpec('filler', 66, 71, 'A', 'Filler'),
+        RecordSpec('stat_code', 12, 1, 'A', 'Statistical Code'),
+        RecordSpec('currency', 13, 3, 'A', 'Currency Code'),
+        RecordSpec('currency_decimals', 16, 1, 'N', 'Currency Decimals'),
+        RecordSpec('fare_amount', 17, 12, 'S', 'Fare Amount (signed)'),
+        RecordSpec('equivalent_fare', 29, 12, 'S', 'Equivalent Fare Amount'),
+        RecordSpec('total_tax', 41, 12, 'S', 'Total Tax Amount'),
+        RecordSpec('penalty', 53, 12, 'S', 'Penalty Amount'),
+        RecordSpec('total_amount', 65, 12, 'S', 'Total Document Amount'),
+        RecordSpec('filler', 77, 60, 'A', 'Filler'),
     ],
 
-    # BKS31 - Tax Breakdown
+    # BKS31 - Coupon Tax Information
     'BKS31': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('tax_country', 18, 2, 'A', 'Tax Country Code'),
-        RecordSpec('currency', 20, 3, 'A', 'Currency Code'),
-        RecordSpec('tax_amount', 23, 12, 'N', 'Tax Amount (with sign)'),
-        RecordSpec('tax_code', 35, 4, 'A', 'Tax Code (YQ, YR, etc.)'),
-        RecordSpec('tax_amount_2', 39, 12, 'N', 'Tax Amount 2 (with sign)'),
-        RecordSpec('filler', 51, 86, 'A', 'Filler'),
+        RecordSpec('tax_country', 12, 2, 'A', 'Tax Country Code'),
+        RecordSpec('tax_code_1', 14, 2, 'A', 'Tax Code 1'),
+        RecordSpec('tax_amount_1', 16, 12, 'S', 'Tax Amount 1'),
+        RecordSpec('tax_code_2', 28, 2, 'A', 'Tax Code 2'),
+        RecordSpec('tax_amount_2', 30, 12, 'S', 'Tax Amount 2'),
+        RecordSpec('tax_code_3', 42, 2, 'A', 'Tax Code 3'),
+        RecordSpec('tax_amount_3', 44, 12, 'S', 'Tax Amount 3'),
+        RecordSpec('tax_code_4', 56, 2, 'A', 'Tax Code 4'),
+        RecordSpec('tax_amount_4', 58, 12, 'S', 'Tax Amount 4'),
+        RecordSpec('filler', 70, 67, 'A', 'Filler'),
     ],
 
-    # BKS39 - Commission
+    # BKS39 - Commission Record
     'BKS39': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('comm_amount', 18, 11, 'N', 'Commission Amount'),
-        RecordSpec('comm_rate', 29, 5, 'N', 'Commission Rate (x100)'),
-        RecordSpec('net_remit', 34, 12, 'N', 'Net Remittance Amount (with sign)'),
-        RecordSpec('filler', 46, 91, 'A', 'Filler'),
+        RecordSpec('comm_type', 12, 1, 'A', 'Commission Type'),
+        RecordSpec('comm_rate', 13, 5, 'N', 'Commission Rate (x100)'),
+        RecordSpec('comm_amount', 18, 12, 'S', 'Commission Amount'),
+        RecordSpec('vat_on_comm', 30, 12, 'S', 'VAT on Commission'),
+        RecordSpec('net_remit', 42, 12, 'S', 'Net Remittance Amount'),
+        RecordSpec('filler', 54, 83, 'A', 'Filler'),
     ],
 
-    # BKI61 - Origin City
-    'BKI61': [
-        RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
-        RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('coupon_number', 18, 3, 'N', 'Coupon Number'),
-        RecordSpec('origin_city', 21, 3, 'A', 'Origin City Code'),
-        RecordSpec('filler', 24, 113, 'A', 'Filler'),
-    ],
-
-    # BKI63 - Itinerary Segment
+    # BKI63 - Itinerary Data Segment
     'BKI63': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('coupon_number', 18, 3, 'N', 'Coupon Number'),
-        RecordSpec('origin', 21, 3, 'A', 'Origin Airport'),
-        RecordSpec('destination', 24, 3, 'A', 'Destination Airport'),
-        RecordSpec('carrier', 27, 3, 'AN', 'Operating Carrier Code'),
-        RecordSpec('class_of_service', 30, 1, 'A', 'Class of Service'),
-        RecordSpec('flight_date', 32, 6, 'N', 'Flight Date YYMMDD'),
-        RecordSpec('flight_date_2', 38, 6, 'N', 'Arrival Date YYMMDD'),
-        RecordSpec('stopover', 44, 4, 'A', 'Stopover Code'),
-        RecordSpec('departure_time', 48, 4, 'N', 'Departure Time HHMM'),
-        RecordSpec('arrival_time', 52, 4, 'N', 'Arrival Time HHMM'),
-        RecordSpec('flight_number', 56, 5, 'AN', 'Flight Number'),
-        RecordSpec('filler', 61, 76, 'A', 'Filler'),
+        RecordSpec('coupon_number', 12, 2, 'N', 'Coupon Number'),
+        RecordSpec('origin', 14, 3, 'A', 'Origin Airport'),
+        RecordSpec('destination', 17, 3, 'A', 'Destination Airport'),
+        RecordSpec('stopover_code', 20, 1, 'A', 'Stopover Code (O/X)'),
+        RecordSpec('carrier', 21, 3, 'AN', 'Operating Carrier Code'),
+        RecordSpec('flight_number', 24, 5, 'AN', 'Flight Number'),
+        RecordSpec('class_of_service', 29, 2, 'A', 'Class of Service'),
+        RecordSpec('flight_date', 31, 6, 'N', 'Flight Date DDMMYY'),
+        RecordSpec('departure_time', 37, 4, 'N', 'Departure Time HHMM'),
+        RecordSpec('arrival_time', 41, 4, 'N', 'Arrival Time HHMM'),
+        RecordSpec('fare_basis', 45, 15, 'AN', 'Fare Basis'),
+        RecordSpec('nvb', 60, 6, 'N', 'Not Valid Before'),
+        RecordSpec('nva', 66, 6, 'N', 'Not Valid After'),
+        RecordSpec('baggage', 72, 3, 'AN', 'Free Baggage Allowance'),
+        RecordSpec('coupon_value', 75, 12, 'S', 'Coupon Value'),
+        RecordSpec('filler', 87, 50, 'A', 'Filler'),
     ],
 
     # BAR64 - Passenger Name
     'BAR64': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('passenger_name', 18, 49, 'A', 'Passenger Name (SURNAME/FIRSTNAME)'),
-        RecordSpec('passenger_type', 67, 3, 'A', 'Passenger Type (ADT/CHD/INF)'),
-        RecordSpec('filler', 70, 67, 'A', 'Filler'),
+        RecordSpec('passenger_name', 12, 49, 'A', 'Passenger Name (SURNAME/FIRSTNAME)'),
+        RecordSpec('passenger_type', 61, 3, 'A', 'Passenger Type (ADT/CHD/INF)'),
+        RecordSpec('filler', 64, 73, 'A', 'Filler'),
     ],
 
-    # BAR66 - Form of Payment Detail
-    'BAR66': [
-        RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
-        RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('fop_type', 18, 2, 'A', 'Form of Payment Type'),
-        RecordSpec('card_type', 20, 4, 'A', 'Card Type (VISA, etc.)'),
-        RecordSpec('card_number', 24, 20, 'AN', 'Card Number (masked)'),
-        RecordSpec('expiry_date', 44, 4, 'N', 'Expiry Date MMYY'),
-        RecordSpec('filler', 48, 89, 'A', 'Filler'),
-    ],
-
-    # BKP84 - Payment Information
+    # BKP84 - Form of Payment
     'BKP84': [
         RecordSpec('record_id', 1, 5, 'A', 'Record Identifier'),
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
-        RecordSpec('transaction_number', 12, 6, 'N', 'Transaction Number'),
-        RecordSpec('fop_type', 18, 4, 'A', 'Form of Payment Type'),
-        RecordSpec('fop_amount', 22, 12, 'N', 'FOP Amount (with sign)'),
-        RecordSpec('currency', 34, 3, 'A', 'Currency Code'),
-        RecordSpec('card_number', 37, 20, 'AN', 'Card Number'),
-        RecordSpec('expiry', 57, 4, 'N', 'Expiry MMYY'),
-        RecordSpec('filler', 61, 76, 'A', 'Filler'),
+        RecordSpec('fop_sequence', 12, 2, 'N', 'FOP Sequence'),
+        RecordSpec('fop_type', 14, 2, 'A', 'Form of Payment Type'),
+        RecordSpec('cc_code', 16, 2, 'A', 'Credit Card Code'),
+        RecordSpec('fop_amount', 18, 12, 'S', 'FOP Amount'),
+        RecordSpec('card_number', 30, 20, 'AN', 'Card Number'),
+        RecordSpec('expiry', 50, 4, 'N', 'Expiry MMYY'),
+        RecordSpec('approval_code', 54, 8, 'AN', 'Approval Code'),
+        RecordSpec('filler', 62, 75, 'A', 'Filler'),
     ],
 
     # BOT93 - Transaction Totals
@@ -203,12 +193,13 @@ RECORD_SPECS = {
         RecordSpec('transaction_code', 12, 4, 'A', 'Transaction Code'),
         RecordSpec('currency', 16, 3, 'A', 'Currency Code'),
         RecordSpec('document_count', 19, 6, 'N', 'Document Count'),
-        RecordSpec('fare_total', 25, 12, 'N', 'Total Fare (with sign)'),
-        RecordSpec('tax_total', 37, 11, 'N', 'Total Tax'),
-        RecordSpec('penalty_total', 48, 11, 'N', 'Total Penalty'),
-        RecordSpec('net_remit_total', 59, 12, 'N', 'Net Remittance (with sign)'),
-        RecordSpec('total_amount', 71, 12, 'N', 'Total Amount (with sign)'),
-        RecordSpec('filler', 83, 54, 'A', 'Filler'),
+        RecordSpec('fare_total', 25, 14, 'S', 'Total Fare'),
+        RecordSpec('tax_total', 39, 14, 'S', 'Total Tax'),
+        RecordSpec('penalty_total', 53, 14, 'S', 'Total Penalty'),
+        RecordSpec('comm_total', 67, 14, 'S', 'Total Commission'),
+        RecordSpec('net_remit_total', 81, 14, 'S', 'Net Remittance'),
+        RecordSpec('total_amount', 95, 14, 'S', 'Total Amount'),
+        RecordSpec('filler', 109, 28, 'A', 'Filler'),
     ],
 
     # BOT94 - Office Totals
@@ -217,12 +208,13 @@ RECORD_SPECS = {
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
         RecordSpec('currency', 12, 3, 'A', 'Currency Code'),
         RecordSpec('document_count', 15, 6, 'N', 'Document Count'),
-        RecordSpec('fare_total', 21, 12, 'N', 'Total Fare (with sign)'),
-        RecordSpec('tax_total', 33, 11, 'N', 'Total Tax'),
-        RecordSpec('penalty_total', 44, 11, 'N', 'Total Penalty'),
-        RecordSpec('net_remit_total', 55, 12, 'N', 'Net Remittance (with sign)'),
-        RecordSpec('total_amount', 67, 12, 'N', 'Total Amount (with sign)'),
-        RecordSpec('filler', 79, 58, 'A', 'Filler'),
+        RecordSpec('fare_total', 21, 14, 'S', 'Total Fare'),
+        RecordSpec('tax_total', 35, 14, 'S', 'Total Tax'),
+        RecordSpec('penalty_total', 49, 14, 'S', 'Total Penalty'),
+        RecordSpec('comm_total', 63, 14, 'S', 'Total Commission'),
+        RecordSpec('net_remit_total', 77, 14, 'S', 'Net Remittance'),
+        RecordSpec('total_amount', 91, 14, 'S', 'Total Amount'),
+        RecordSpec('filler', 105, 32, 'A', 'Filler'),
     ],
 
     # BCT95 - Billing Analysis Totals
@@ -231,12 +223,13 @@ RECORD_SPECS = {
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
         RecordSpec('currency', 12, 3, 'A', 'Currency Code'),
         RecordSpec('document_count', 15, 6, 'N', 'Document Count'),
-        RecordSpec('fare_total', 21, 12, 'N', 'Total Fare (with sign)'),
-        RecordSpec('tax_total', 33, 11, 'N', 'Total Tax'),
-        RecordSpec('penalty_total', 44, 11, 'N', 'Total Penalty'),
-        RecordSpec('net_remit_total', 55, 12, 'N', 'Net Remittance (with sign)'),
-        RecordSpec('total_amount', 67, 12, 'N', 'Total Amount (with sign)'),
-        RecordSpec('filler', 79, 58, 'A', 'Filler'),
+        RecordSpec('fare_total', 21, 14, 'S', 'Total Fare'),
+        RecordSpec('tax_total', 35, 14, 'S', 'Total Tax'),
+        RecordSpec('penalty_total', 49, 14, 'S', 'Total Penalty'),
+        RecordSpec('comm_total', 63, 14, 'S', 'Total Commission'),
+        RecordSpec('net_remit_total', 77, 14, 'S', 'Net Remittance'),
+        RecordSpec('total_amount', 91, 14, 'S', 'Total Amount'),
+        RecordSpec('filler', 105, 32, 'A', 'Filler'),
     ],
 
     # BFT99 - File Totals
@@ -245,12 +238,13 @@ RECORD_SPECS = {
         RecordSpec('sequence_number', 6, 6, 'N', 'Sequence Number'),
         RecordSpec('currency', 12, 3, 'A', 'Currency Code'),
         RecordSpec('document_count', 15, 6, 'N', 'Document Count'),
-        RecordSpec('fare_total', 21, 12, 'N', 'Total Fare (with sign)'),
-        RecordSpec('tax_total', 33, 11, 'N', 'Total Tax'),
-        RecordSpec('penalty_total', 44, 11, 'N', 'Total Penalty'),
-        RecordSpec('net_remit_total', 55, 12, 'N', 'Net Remittance (with sign)'),
-        RecordSpec('total_amount', 67, 12, 'N', 'Total Amount (with sign)'),
-        RecordSpec('filler', 79, 58, 'A', 'Filler'),
+        RecordSpec('fare_total', 21, 14, 'S', 'Total Fare'),
+        RecordSpec('tax_total', 35, 14, 'S', 'Total Tax'),
+        RecordSpec('penalty_total', 49, 14, 'S', 'Total Penalty'),
+        RecordSpec('comm_total', 63, 14, 'S', 'Total Commission'),
+        RecordSpec('net_remit_total', 77, 14, 'S', 'Net Remittance'),
+        RecordSpec('total_amount', 91, 14, 'S', 'Total Amount'),
+        RecordSpec('filler', 105, 32, 'A', 'Filler'),
     ],
 }
 
@@ -264,13 +258,18 @@ class TicketDocument:
     """Represents a complete ticket/document with all related records"""
     document_number: str = ""
     transaction_code: str = ""  # TKTT, RFND, EXCH
+    form_code: str = ""
     issue_date: Optional[datetime] = None
+    original_issue_date: Optional[datetime] = None
+    dom_int_indicator: str = ""
     passenger_name: str = ""
     passenger_type: str = ""
 
     # Financial
     currency: str = ""
+    currency_decimals: int = 2
     fare_amount: Decimal = Decimal('0')
+    equivalent_fare: Decimal = Decimal('0')
     total_tax: Decimal = Decimal('0')
     penalty: Decimal = Decimal('0')
     total_amount: Decimal = Decimal('0')
@@ -282,13 +281,13 @@ class TicketDocument:
     taxes: List[Dict[str, Any]] = field(default_factory=list)
 
     # Itinerary
-    origin_city: str = ""
     segments: List[Dict[str, Any]] = field(default_factory=list)
 
     # Payment
     fop_type: str = ""
-    card_type: str = ""
+    fop_cc_code: str = ""
     card_number: str = ""
+    fop_amount: Decimal = Decimal('0')
 
     # Raw data
     raw_records: List[Dict[str, Any]] = field(default_factory=list)
@@ -347,31 +346,69 @@ class HOTParser:
 
     RECORD_LENGTH = 136
 
+    # EBCDIC Overpunch mapping for signed fields
+    # Positive: { = 0, A = 1, B = 2, C = 3, D = 4, E = 5, F = 6, G = 7, H = 8, I = 9
+    # Negative: } = 0, J = 1, K = 2, L = 3, M = 4, N = 5, O = 6, P = 7, Q = 8, R = 9
+    OVERPUNCH_POSITIVE = {'{': '0', 'A': '1', 'B': '2', 'C': '3', 'D': '4',
+                          'E': '5', 'F': '6', 'G': '7', 'H': '8', 'I': '9'}
+    OVERPUNCH_NEGATIVE = {'}': '0', 'J': '1', 'K': '2', 'L': '3', 'M': '4',
+                          'N': '5', 'O': '6', 'P': '7', 'Q': '8', 'R': '9'}
+
     def __init__(self, debug: bool = False):
         self.debug = debug
         self.errors: List[str] = []
         self.warnings: List[str] = []
+        self._currency_decimals = 2  # Default decimal places
 
     def parse_file(self, filepath: str) -> HOTFile:
         """Parse a HOT file and return structured data"""
-        with open(filepath, 'r', encoding='latin-1') as f:
+        with open(filepath, 'rb') as f:
             content = f.read()
-        return self.parse_content(content)
+        # Try different encodings
+        for encoding in ['latin-1', 'cp1252', 'utf-8', 'ascii']:
+            try:
+                text = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            text = content.decode('latin-1', errors='replace')
+        return self.parse_content(text)
 
     def parse_content(self, content: str) -> HOTFile:
         """Parse HOT content string"""
         hot_file = HOTFile()
-        lines = content.strip().split('\n')
+
+        # Handle both \n and \r\n line endings, and also fixed-width without line breaks
+        content = content.replace('\r\n', '\n').replace('\r', '\n')
+
+        # Check if content has line breaks or is continuous
+        if '\n' in content:
+            lines = content.strip().split('\n')
+        else:
+            # Split by fixed record length
+            lines = [content[i:i+self.RECORD_LENGTH]
+                     for i in range(0, len(content), self.RECORD_LENGTH)]
 
         current_agent: Optional[Agent] = None
         current_document: Optional[TicketDocument] = None
 
         for line_num, line in enumerate(lines, 1):
+            # Skip empty lines
+            line = line.rstrip('\r\n')
+            if not line or line.isspace():
+                continue
+
             # Pad line to 136 characters if needed
             if len(line) < self.RECORD_LENGTH:
                 line = line.ljust(self.RECORD_LENGTH)
 
             record_id = line[:5]
+
+            # Skip unknown record types silently for common filler records
+            if record_id.strip() == '' or record_id.startswith(' '):
+                continue
+
             parsed = self._parse_record(line, record_id)
 
             if parsed is None:
@@ -388,18 +425,22 @@ class HOTParser:
                 self._process_billing_header(hot_file, parsed)
 
             elif record_id == 'BOH03':
-                # New agent
+                # Save previous agent
+                if current_document and current_agent:
+                    current_agent.documents.append(current_document)
+                    current_document = None
                 if current_agent:
                     hot_file.agents.append(current_agent)
+                # New agent
                 current_agent = Agent()
                 self._process_office_header(current_agent, parsed)
 
             elif record_id == 'BKT06':
-                # New transaction group (can contain multiple documents)
+                # Transaction header - can be used for grouping
                 pass
 
             elif record_id == 'BKS24':
-                # New document
+                # New document - save previous if exists
                 if current_document and current_agent:
                     current_agent.documents.append(current_document)
                 current_document = TicketDocument()
@@ -414,28 +455,44 @@ class HOTParser:
             elif record_id == 'BKS39' and current_document:
                 self._process_commission(current_document, parsed)
 
-            elif record_id == 'BKI61' and current_document:
-                self._process_origin(current_document, parsed)
-
             elif record_id == 'BKI63' and current_document:
                 self._process_segment(current_document, parsed)
 
             elif record_id == 'BAR64' and current_document:
                 self._process_passenger(current_document, parsed)
 
-            elif record_id in ('BAR66', 'BKP84') and current_document:
+            elif record_id == 'BKP84' and current_document:
                 self._process_payment(current_document, parsed)
 
+            elif record_id == 'BOT93':
+                # Transaction totals - informational
+                pass
+
             elif record_id == 'BOT94' and current_agent:
+                # Save last document before processing totals
+                if current_document:
+                    current_agent.documents.append(current_document)
+                    current_document = None
                 self._process_office_totals(current_agent, parsed)
 
+            elif record_id == 'BCT95':
+                # Billing analysis totals - informational
+                pass
+
             elif record_id == 'BFT99':
+                # Save last agent before processing file totals
+                if current_document and current_agent:
+                    current_agent.documents.append(current_document)
+                    current_document = None
+                if current_agent:
+                    hot_file.agents.append(current_agent)
+                    current_agent = None
                 self._process_file_totals(hot_file, parsed)
 
-        # Add last document and agent
+        # Add remaining document and agent
         if current_document and current_agent:
             current_agent.documents.append(current_document)
-        if current_agent:
+        if current_agent and current_agent not in hot_file.agents:
             hot_file.agents.append(current_agent)
 
         return hot_file
@@ -450,140 +507,200 @@ class HOTParser:
         for spec in RECORD_SPECS[record_id]:
             start = spec.start - 1  # Convert to 0-indexed
             end = start + spec.length
-            raw_value = line[start:end]
+            raw_value = line[start:end] if end <= len(line) else line[start:]
 
             # Parse based on data type
-            if spec.data_type == 'N':
-                result[spec.name] = self._parse_numeric(raw_value, spec.name)
+            if spec.data_type == 'S':  # Signed numeric with overpunch
+                result[spec.name] = self._parse_signed_numeric(raw_value)
+            elif spec.data_type == 'N':
+                result[spec.name] = self._parse_numeric(raw_value)
             else:
                 result[spec.name] = raw_value.strip()
 
         return result
 
-    def _parse_numeric(self, value: str, field_name: str) -> Decimal:
-        """Parse numeric field handling signs and implicit decimals"""
+    def _parse_signed_numeric(self, value: str) -> Decimal:
+        """Parse signed numeric field with EBCDIC overpunch convention"""
         value = value.strip()
         if not value:
             return Decimal('0')
 
-        # Handle IATA sign convention (} = negative, { = positive at end)
         is_negative = False
-        if value.endswith('}'):
+        last_char = value[-1]
+
+        # Check for overpunch sign in last character
+        if last_char in self.OVERPUNCH_POSITIVE:
+            value = value[:-1] + self.OVERPUNCH_POSITIVE[last_char]
+            is_negative = False
+        elif last_char in self.OVERPUNCH_NEGATIVE:
+            value = value[:-1] + self.OVERPUNCH_NEGATIVE[last_char]
             is_negative = True
+        # Also check for explicit +/- signs at end
+        elif last_char == '+':
             value = value[:-1]
-        elif value.endswith('{'):
+            is_negative = False
+        elif last_char == '-':
             value = value[:-1]
+            is_negative = True
 
-        # Remove non-numeric except minus
-        value = re.sub(r'[^0-9\-]', '', value)
+        # Remove non-numeric
+        value = re.sub(r'[^0-9]', '', value)
 
-        if not value or value == '-':
+        if not value:
             return Decimal('0')
 
         try:
-            # Amounts typically have 2 implied decimal places
-            result = Decimal(value) / 100
+            # Apply decimal places (default 2)
+            result = Decimal(value) / (10 ** self._currency_decimals)
             if is_negative:
                 result = -result
             return result
         except Exception:
             return Decimal('0')
 
-    def _parse_date(self, value: str) -> Optional[datetime]:
-        """Parse date in YYMMDD format"""
+    def _parse_numeric(self, value: str) -> Any:
+        """Parse unsigned numeric field"""
         value = value.strip()
-        if not value or len(value) != 6:
+        if not value:
+            return 0
+
+        # Remove non-numeric
+        clean_value = re.sub(r'[^0-9]', '', value)
+
+        if not clean_value:
+            return 0
+
+        try:
+            return int(clean_value)
+        except ValueError:
+            return 0
+
+    def _parse_date_ddmmyy(self, value: str) -> Optional[datetime]:
+        """Parse date in DDMMYY format"""
+        value = str(value).strip().zfill(6)
+        if not value or len(value) != 6 or value == '000000':
             return None
         try:
-            return datetime.strptime(value, '%y%m%d')
+            return datetime.strptime(value, '%d%m%y')
         except ValueError:
-            return None
+            # Try YYMMDD format as fallback
+            try:
+                return datetime.strptime(value, '%y%m%d')
+            except ValueError:
+                return None
 
     def _process_file_header(self, hot_file: HOTFile, record: Dict):
         hot_file.bsp_code = record.get('bsp_code', '')
-        hot_file.file_date = self._parse_date(str(record.get('file_date', '')).zfill(6))
+        hot_file.file_date = self._parse_date_ddmmyy(record.get('file_date', ''))
         hot_file.billing_period = str(record.get('billing_period', ''))
         hot_file.dish_version = record.get('dish_version', '')
         hot_file.file_type = record.get('file_type', '')
+        if record.get('airline_code'):
+            hot_file.airline_code = record.get('airline_code', '')
 
     def _process_billing_header(self, hot_file: HOTFile, record: Dict):
         hot_file.airline_code = record.get('airline_code', '')
         hot_file.currency = record.get('currency', '')
+        if not hot_file.bsp_code:
+            hot_file.bsp_code = record.get('bsp_code', '')
 
     def _process_office_header(self, agent: Agent, record: Dict):
         agent.iata_number = record.get('agent_iata_number', '')
-        agent.name = record.get('agent_name', '')
+        agent.name = record.get('agent_name', '').strip()
         agent.city = record.get('agent_city', '')
 
     def _process_document_id(self, doc: TicketDocument, record: Dict):
-        doc.document_number = record.get('document_number', '')
-        doc.transaction_code = record.get('transaction_code', '')
-        doc.issue_date = self._parse_date(str(record.get('issue_date', '')).zfill(6))
+        doc.document_number = record.get('document_number', '').strip()
+        doc.transaction_code = record.get('transaction_code', '').strip()
+        doc.form_code = record.get('form_code', '').strip()
+        doc.issue_date = self._parse_date_ddmmyy(record.get('issue_date', ''))
+        doc.original_issue_date = self._parse_date_ddmmyy(record.get('original_issue_date', ''))
+        doc.dom_int_indicator = record.get('dom_int_indicator', '')
         doc.raw_records.append(record)
 
     def _process_amounts(self, doc: TicketDocument, record: Dict):
-        doc.currency = record.get('currency', '')
+        doc.currency = record.get('currency', '').strip()
+
+        # Get currency decimals if available
+        decimals = record.get('currency_decimals', 2)
+        if isinstance(decimals, int) and 0 <= decimals <= 4:
+            doc.currency_decimals = decimals
+            self._currency_decimals = decimals
+
         doc.fare_amount = record.get('fare_amount', Decimal('0'))
+        doc.equivalent_fare = record.get('equivalent_fare', Decimal('0'))
         doc.total_tax = record.get('total_tax', Decimal('0'))
         doc.penalty = record.get('penalty', Decimal('0'))
         doc.total_amount = record.get('total_amount', Decimal('0'))
         doc.raw_records.append(record)
 
     def _process_tax(self, doc: TicketDocument, record: Dict):
-        tax_info = {
-            'country': record.get('tax_country', ''),
-            'currency': record.get('currency', ''),
-            'code': record.get('tax_code', ''),
-            'amount': record.get('tax_amount', Decimal('0')),
-        }
-        doc.taxes.append(tax_info)
+        country = record.get('tax_country', '')
+
+        # Process up to 4 tax codes per record
+        for i in range(1, 5):
+            tax_code = record.get(f'tax_code_{i}', '').strip()
+            tax_amount = record.get(f'tax_amount_{i}', Decimal('0'))
+
+            if tax_code and tax_amount != Decimal('0'):
+                tax_info = {
+                    'country': country,
+                    'code': tax_code,
+                    'amount': tax_amount,
+                }
+                doc.taxes.append(tax_info)
+
         doc.raw_records.append(record)
 
     def _process_commission(self, doc: TicketDocument, record: Dict):
+        comm_rate = record.get('comm_rate', 0)
+        if isinstance(comm_rate, int):
+            doc.commission_rate = Decimal(comm_rate) / 100  # Convert from x100
+        else:
+            doc.commission_rate = Decimal('0')
         doc.commission_amount = record.get('comm_amount', Decimal('0'))
-        doc.commission_rate = record.get('comm_rate', Decimal('0')) / 100  # Convert from x100
         doc.net_remit = record.get('net_remit', Decimal('0'))
-        doc.raw_records.append(record)
-
-    def _process_origin(self, doc: TicketDocument, record: Dict):
-        doc.origin_city = record.get('origin_city', '')
         doc.raw_records.append(record)
 
     def _process_segment(self, doc: TicketDocument, record: Dict):
         segment = {
             'coupon': record.get('coupon_number', ''),
-            'origin': record.get('origin', ''),
-            'destination': record.get('destination', ''),
-            'carrier': record.get('carrier', ''),
-            'class': record.get('class_of_service', ''),
-            'flight_date': self._parse_date(str(record.get('flight_date', '')).zfill(6)),
-            'departure_time': record.get('departure_time', ''),
-            'arrival_time': record.get('arrival_time', ''),
-            'flight_number': record.get('flight_number', ''),
+            'origin': record.get('origin', '').strip(),
+            'destination': record.get('destination', '').strip(),
+            'stopover': record.get('stopover_code', ''),
+            'carrier': record.get('carrier', '').strip(),
+            'flight_number': record.get('flight_number', '').strip(),
+            'class': record.get('class_of_service', '').strip(),
+            'flight_date': self._parse_date_ddmmyy(record.get('flight_date', '')),
+            'departure_time': str(record.get('departure_time', '')).zfill(4),
+            'arrival_time': str(record.get('arrival_time', '')).zfill(4),
+            'fare_basis': record.get('fare_basis', '').strip(),
         }
         doc.segments.append(segment)
         doc.raw_records.append(record)
 
     def _process_passenger(self, doc: TicketDocument, record: Dict):
-        doc.passenger_name = record.get('passenger_name', '')
-        doc.passenger_type = record.get('passenger_type', '')
+        doc.passenger_name = record.get('passenger_name', '').strip()
+        doc.passenger_type = record.get('passenger_type', '').strip()
         doc.raw_records.append(record)
 
     def _process_payment(self, doc: TicketDocument, record: Dict):
-        doc.fop_type = record.get('fop_type', '')
-        doc.card_type = record.get('card_type', '')
-        doc.card_number = record.get('card_number', '')
+        doc.fop_type = record.get('fop_type', '').strip()
+        doc.fop_cc_code = record.get('cc_code', '').strip()
+        doc.card_number = record.get('card_number', '').strip()
+        doc.fop_amount = record.get('fop_amount', Decimal('0'))
         doc.raw_records.append(record)
 
     def _process_office_totals(self, agent: Agent, record: Dict):
-        agent.document_count = int(record.get('document_count', 0))
+        agent.document_count = record.get('document_count', 0)
         agent.total_fare = record.get('fare_total', Decimal('0'))
         agent.total_tax = record.get('tax_total', Decimal('0'))
         agent.total_amount = record.get('total_amount', Decimal('0'))
         agent.net_remit = record.get('net_remit_total', Decimal('0'))
 
     def _process_file_totals(self, hot_file: HOTFile, record: Dict):
-        hot_file.total_documents = int(record.get('document_count', 0))
+        hot_file.currency = record.get('currency', '') or hot_file.currency
+        hot_file.total_documents = record.get('document_count', 0)
         hot_file.total_fare = record.get('fare_total', Decimal('0'))
         hot_file.total_tax = record.get('tax_total', Decimal('0'))
         hot_file.total_amount = record.get('total_amount', Decimal('0'))
@@ -606,7 +723,7 @@ def generate_summary_report(hot_file: HOTFile) -> str:
     lines.append("FILE INFORMATION")
     lines.append("-" * 40)
     lines.append(f"BSP Code:        {hot_file.bsp_code}")
-    lines.append(f"File Date:       {hot_file.file_date}")
+    lines.append(f"File Date:       {hot_file.file_date.strftime('%d-%m-%Y') if hot_file.file_date else '-'}")
     lines.append(f"Billing Period:  {hot_file.billing_period}")
     lines.append(f"Airline Code:    {hot_file.airline_code}")
     lines.append(f"Currency:        {hot_file.currency}")
@@ -635,30 +752,32 @@ def generate_summary_report(hot_file: HOTFile) -> str:
         # Documents
         for doc in agent.documents:
             lines.append(f"\n    Ticket: {doc.document_number}")
-            lines.append(f"    Type: {doc.transaction_code}")
+            lines.append(f"    Type: {doc.transaction_code} ({doc.form_code})")
             lines.append(f"    Passenger: {doc.passenger_name} ({doc.passenger_type})")
-            lines.append(f"    Issue Date: {doc.issue_date}")
+            lines.append(f"    Issue Date: {doc.issue_date.strftime('%d-%m-%Y') if doc.issue_date else '-'}")
+            lines.append(f"    Dom/Int: {doc.dom_int_indicator}")
             lines.append(f"    Fare: {doc.currency} {doc.fare_amount:,.2f}")
             lines.append(f"    Tax: {doc.currency} {doc.total_tax:,.2f}")
             lines.append(f"    Total: {doc.currency} {doc.total_amount:,.2f}")
             lines.append(f"    Commission: {doc.commission_rate:.2%} ({doc.currency} {doc.commission_amount:,.2f})")
             lines.append(f"    Net Remit: {doc.currency} {doc.net_remit:,.2f}")
-            lines.append(f"    Payment: {doc.fop_type} {doc.card_type} {doc.card_number}")
+            lines.append(f"    Payment: {doc.fop_type} {doc.fop_cc_code} {doc.card_number}")
 
             # Itinerary
             if doc.segments:
-                lines.append(f"    Origin: {doc.origin_city}")
                 lines.append("    Itinerary:")
                 for seg in doc.segments:
+                    flight_date = seg['flight_date'].strftime('%d%b') if seg.get('flight_date') else ''
                     lines.append(f"      {seg['coupon']}: {seg['origin']}-{seg['destination']} "
                                f"{seg['carrier']}{seg['flight_number']} {seg['class']} "
-                               f"{seg['flight_date']} {seg['departure_time']}-{seg['arrival_time']}")
+                               f"{flight_date} {seg['departure_time']}-{seg['arrival_time']} "
+                               f"({seg.get('fare_basis', '')})")
 
             # Taxes
             if doc.taxes:
                 lines.append("    Taxes:")
                 for tax in doc.taxes:
-                    lines.append(f"      {tax['code']}: {tax['currency']} {tax['amount']:,.2f} ({tax['country']})")
+                    lines.append(f"      {tax['code']}: {doc.currency} {tax['amount']:,.2f} ({tax.get('country', '')})")
 
     lines.append("")
     lines.append("=" * 70)
@@ -678,29 +797,31 @@ def export_to_csv(hot_file: HOTFile, filepath: str):
         # Header
         writer.writerow([
             'Agent_IATA', 'Agent_Name', 'Agent_City',
-            'Document_Number', 'Transaction_Code', 'Issue_Date',
-            'Passenger_Name', 'Passenger_Type',
-            'Currency', 'Fare', 'Tax', 'Total', 'Commission_Rate', 'Commission_Amount', 'Net_Remit',
-            'FOP_Type', 'Card_Type',
-            'Origin', 'Itinerary'
+            'Document_Number', 'Transaction_Code', 'Form_Code', 'Issue_Date',
+            'Passenger_Name', 'Passenger_Type', 'Dom_Int',
+            'Currency', 'Fare', 'Tax', 'Penalty', 'Total',
+            'Commission_Rate', 'Commission_Amount', 'Net_Remit',
+            'FOP_Type', 'CC_Code', 'Card_Number',
+            'Itinerary'
         ])
 
         # Data
         for agent in hot_file.agents:
             for doc in agent.documents:
                 itinerary = ' / '.join([
-                    f"{s['origin']}-{s['destination']}" for s in doc.segments
+                    f"{s.get('origin', '')}-{s.get('destination', '')}" for s in doc.segments
                 ])
 
                 writer.writerow([
                     agent.iata_number, agent.name, agent.city,
-                    doc.document_number, doc.transaction_code,
+                    doc.document_number, doc.transaction_code, doc.form_code,
                     doc.issue_date.strftime('%Y-%m-%d') if doc.issue_date else '',
-                    doc.passenger_name, doc.passenger_type,
-                    doc.currency, doc.fare_amount, doc.total_tax, doc.total_amount,
-                    doc.commission_rate, doc.commission_amount, doc.net_remit,
-                    doc.fop_type, doc.card_type,
-                    doc.origin_city, itinerary
+                    doc.passenger_name, doc.passenger_type, doc.dom_int_indicator,
+                    doc.currency, float(doc.fare_amount), float(doc.total_tax),
+                    float(doc.penalty), float(doc.total_amount),
+                    float(doc.commission_rate), float(doc.commission_amount), float(doc.net_remit),
+                    doc.fop_type, doc.fop_cc_code, doc.card_number,
+                    itinerary
                 ])
 
 
@@ -725,6 +846,7 @@ def export_to_json(hot_file: HOTFile, filepath: str):
             'airline_code': hot_file.airline_code,
             'currency': hot_file.currency,
             'dish_version': hot_file.dish_version,
+            'file_type': hot_file.file_type,
         },
         'totals': {
             'documents': hot_file.total_documents,
@@ -742,6 +864,7 @@ def export_to_json(hot_file: HOTFile, filepath: str):
             'name': agent.name,
             'city': agent.city,
             'totals': {
+                'documents': agent.document_count,
                 'fare': agent.total_fare,
                 'tax': agent.total_tax,
                 'total': agent.total_amount,
@@ -754,7 +877,9 @@ def export_to_json(hot_file: HOTFile, filepath: str):
             doc_data = {
                 'document_number': doc.document_number,
                 'transaction_code': doc.transaction_code,
+                'form_code': doc.form_code,
                 'issue_date': doc.issue_date,
+                'dom_int': doc.dom_int_indicator,
                 'passenger': {
                     'name': doc.passenger_name,
                     'type': doc.passenger_type,
@@ -762,6 +887,7 @@ def export_to_json(hot_file: HOTFile, filepath: str):
                 'amounts': {
                     'currency': doc.currency,
                     'fare': doc.fare_amount,
+                    'equivalent_fare': doc.equivalent_fare,
                     'tax': doc.total_tax,
                     'penalty': doc.penalty,
                     'total': doc.total_amount,
@@ -773,13 +899,11 @@ def export_to_json(hot_file: HOTFile, filepath: str):
                 },
                 'payment': {
                     'type': doc.fop_type,
-                    'card_type': doc.card_type,
+                    'cc_code': doc.fop_cc_code,
                     'card_number': doc.card_number,
+                    'amount': doc.fop_amount,
                 },
-                'itinerary': {
-                    'origin': doc.origin_city,
-                    'segments': doc.segments,
-                },
+                'itinerary': doc.segments,
                 'taxes': doc.taxes,
             }
             agent_data['documents'].append(doc_data)
@@ -797,7 +921,7 @@ def export_to_json(hot_file: HOTFile, filepath: str):
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description='IATA DISH HOT File Parser')
+    parser = argparse.ArgumentParser(description='IATA DISH HOT File Parser (Rev 23)')
     parser.add_argument('input', help='Input HOT file path')
     parser.add_argument('-o', '--output', help='Output file path')
     parser.add_argument('-f', '--format', choices=['report', 'csv', 'json'],
@@ -813,8 +937,10 @@ def main():
     # Warnings
     if hot_parser.warnings:
         print("Warnings:")
-        for w in hot_parser.warnings:
+        for w in hot_parser.warnings[:20]:  # Limit warnings shown
             print(f"  - {w}")
+        if len(hot_parser.warnings) > 20:
+            print(f"  ... and {len(hot_parser.warnings) - 20} more warnings")
         print()
 
     # Output
