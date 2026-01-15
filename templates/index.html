@@ -672,7 +672,7 @@
                                 <td>${formatCurrency(doc.amounts.fare, currency)}</td>
                                 <td>${formatCurrency(doc.amounts.tax, currency)}</td>
                                 <td><strong>${formatCurrency(doc.amounts.total, currency)}</strong></td>
-                                <td>${doc.payment.type} ${doc.payment.card_type}</td>
+                                <td>${doc.payment.type} ${doc.payment.cc_code}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -682,7 +682,7 @@
 
         function getItinerary(doc) {
             if (!doc.itinerary || !doc.itinerary.segments || doc.itinerary.segments.length === 0) {
-                return doc.itinerary?.origin || '-';
+                return '-';
             }
             return doc.itinerary.segments.map(s => `${s.origin}-${s.destination}`).join(' / ');
         }

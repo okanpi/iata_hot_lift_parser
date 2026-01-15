@@ -82,11 +82,12 @@ def hot_file_to_dict(hot_file: HOTFile) -> dict:
                         },
                         'payment': {
                             'type': doc.fop_type,
-                            'card_type': doc.card_type,
+                            'cc_code': doc.fop_cc_code,
                             'card_number': doc.card_number,
                         },
+                        'form_code': doc.form_code,
+                        'dom_int': doc.dom_int_indicator,
                         'itinerary': {
-                            'origin': doc.origin_city,
                             'segments': [
                                 {
                                     'coupon': seg.get('coupon', ''),
@@ -128,11 +129,12 @@ def generate_csv_content(hot_file: HOTFile) -> str:
     # Header
     writer.writerow([
         'Agent_IATA', 'Agent_Name', 'Agent_City',
-        'Document_Number', 'Transaction_Code', 'Issue_Date',
+        'Document_Number', 'Transaction_Code', 'Form_Code', 'Issue_Date', 'Dom_Int',
         'Passenger_Name', 'Passenger_Type',
-        'Currency', 'Fare', 'Tax', 'Total', 'Commission_Rate', 'Commission_Amount', 'Net_Remit',
-        'FOP_Type', 'Card_Type',
-        'Origin', 'Itinerary'
+        'Currency', 'Fare', 'Tax', 'Penalty', 'Total',
+        'Commission_Rate', 'Commission_Amount', 'Net_Remit',
+        'FOP_Type', 'CC_Code', 'Card_Number',
+        'Itinerary'
     ])
 
     # Data
@@ -144,13 +146,15 @@ def generate_csv_content(hot_file: HOTFile) -> str:
 
             writer.writerow([
                 agent.iata_number, agent.name, agent.city,
-                doc.document_number, doc.transaction_code,
+                doc.document_number, doc.transaction_code, doc.form_code,
                 doc.issue_date.strftime('%Y-%m-%d') if doc.issue_date else '',
+                doc.dom_int_indicator,
                 doc.passenger_name, doc.passenger_type,
-                doc.currency, float(doc.fare_amount), float(doc.total_tax), float(doc.total_amount),
+                doc.currency, float(doc.fare_amount), float(doc.total_tax),
+                float(doc.penalty), float(doc.total_amount),
                 float(doc.commission_rate), float(doc.commission_amount), float(doc.net_remit),
-                doc.fop_type, doc.card_type,
-                doc.origin_city, itinerary
+                doc.fop_type, doc.fop_cc_code, doc.card_number,
+                itinerary
             ])
 
     return output.getvalue()
