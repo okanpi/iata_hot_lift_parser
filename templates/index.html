@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IATA HOT/LIFT Parser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e4e4e4;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        .upload-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+
+        .dropzone {
+            border: 3px dashed #444;
+            border-radius: 12px;
+            padding: 60px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .dropzone-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        .dropzone h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .dropzone p {
+            color: #888;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            margin-left: 10px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .btn-export {
+            background: linear-gradient(135deg, #00c853, #009624);
+            color: #fff;
+            margin: 5px;
+        }
+
+        .btn-export:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 200, 83, 0.3);
+        }
+
+        .results-section {
+            display: none;
+        }
+
+        .results-section.visible {
+            display: block;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            color: #00d4ff;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .info-item {
+            background: rgba(0,0,0,0.2);
+            padding: 16px;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 1.1rem;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .totals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .total-card {
+            background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,153,204,0.1));
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid rgba(0,212,255,0.2);
+        }
+
+        .total-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #00d4ff;
+        }
+
+        .total-label {
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .agent-card {
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .agent-header {
+            background: rgba(255,255,255,0.05);
+            padding: 16px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .agent-header:hover {
+            background: rgba(255,255,255,0.08);
+        }
+
+        .agent-info h4 {
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .agent-info span {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .agent-total {
+            text-align: right;
+        }
+
+        .agent-total .amount {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #00d4ff;
+        }
+
+        .agent-total .count {
+            color: #888;
+            font-size: 0.85rem;
+        }
+
+        .agent-documents {
+            display: none;
+            padding: 16px;
+        }
+
+        .agent-documents.visible {
+            display: block;
+        }
+
+        .document-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .document-table th,
+        .document-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .document-table th {
+            background: rgba(0,0,0,0.2);
+            color: #00d4ff;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .document-table tr:hover td {
+            background: rgba(255,255,255,0.02);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-tktt {
+            background: rgba(0, 200, 83, 0.2);
+            color: #00c853;
+        }
+
+        .badge-rfnd {
+            background: rgba(255, 82, 82, 0.2);
+            color: #ff5252;
+        }
+
+        .badge-exch {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.visible {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(0,212,255,0.2);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: rgba(255, 82, 82, 0.2);
+            border: 1px solid rgba(255, 82, 82, 0.3);
+            color: #ff5252;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.visible {
+            display: block;
+        }
+
+        .warnings {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            color: #ffc107;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .warnings h4 {
+            margin-bottom: 8px;
+        }
+
+        .warnings ul {
+            margin-left: 20px;
+            font-size: 0.9rem;
+        }
+
+        .export-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .itinerary {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8rem;
+            }
+
+            .dropzone {
+                padding: 40px 20px;
+            }
+
+            .document-table {
+                font-size: 0.85rem;
+            }
+
+            .document-table th,
+            .document-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>IATA HOT/LIFT Parser</h1>
+            <p>BSP Hand-Off Transmission dosyalarinizi yukleyin ve analiz edin</p>
+        </header>
+
+        <section class="upload-section">
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-icon">📁</div>
+                <h3>Dosya Yukle</h3>
+                <p>HOT veya LIFT dosyasini surukleyip birakin veya tiklayin</p>
+                <p style="margin-top: 10px; font-size: 0.85rem; color: #666;">
+                    Desteklenen formatlar: .hot, .lift, .txt
+                </p>
+            </div>
+            <input type="file" id="fileInput" class="file-input" accept=".hot,.lift,.txt">
+        </section>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Dosya analiz ediliyor...</p>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <section class="results-section" id="results">
+            <div class="export-buttons">
+                <button class="btn btn-export" onclick="downloadJSON()">JSON Indir</button>
+                <button class="btn btn-export" onclick="downloadCSV()">CSV Indir</button>
+                <button class="btn btn-export" onclick="downloadReport()">Rapor Indir</button>
+                <button class="btn btn-secondary" onclick="resetParser()">Yeni Dosya</button>
+            </div>
+
+            <div id="warnings"></div>
+
+            <div class="card">
+                <h3 class="card-title">Dosya Bilgileri</h3>
+                <div class="info-grid" id="fileInfo"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">Genel Toplamlar</h3>
+                <div class="totals-grid" id="fileTotals"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">Acenteler ve Belgeler</h3>
+                <div id="agentsList"></div>
+            </div>
+        </section>
+
+        <footer>
+            IATA DISH HOT Parser - Freebird Airlines Revenue Accounting
+        </footer>
+    </div>
+
+    <script>
+        let parsedData = null;
+        let currentFile = null;
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Drag and drop handlers
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('dragover');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            currentFile = file;
+            showLoading();
+            hideError();
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/parse', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    parsedData = data;
+                    displayResults(data);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showError('Dosya islenirken hata olustu: ' + error.message);
+            });
+        }
+
+        function showLoading() {
+            loading.classList.add('visible');
+            results.classList.remove('visible');
+        }
+
+        function hideLoading() {
+            loading.classList.remove('visible');
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('visible');
+        }
+
+        function hideError() {
+            errorMessage.classList.remove('visible');
+        }
+
+        function displayResults(data) {
+            results.classList.add('visible');
+
+            // Display warnings
+            const warningsDiv = document.getElementById('warnings');
+            if (data.warnings && data.warnings.length > 0) {
+                warningsDiv.innerHTML = `
+                    <div class="warnings">
+                        <h4>Uyarilar (${data.warnings.length})</h4>
+                        <ul>${data.warnings.map(w => `<li>${w}</li>`).join('')}</ul>
+                    </div>
+                `;
+            } else {
+                warningsDiv.innerHTML = '';
+            }
+
+            // File info
+            const fileInfo = document.getElementById('fileInfo');
+            const info = data.file_info;
+            fileInfo.innerHTML = `
+                <div class="info-item">
+                    <div class="info-label">Dosya Adi</div>
+                    <div class="info-value">${data.filename || '-'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">BSP Kodu</div>
+                    <div class="info-value">${info.bsp_code || '-'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Havayolu Kodu</div>
+                    <div class="info-value">${info.airline_code || '-'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Fatura Donemi</div>
+                    <div class="info-value">${info.billing_period || '-'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Para Birimi</div>
+                    <div class="info-value">${info.currency || '-'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">DISH Versiyon</div>
+                    <div class="info-value">${info.dish_version || '-'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Dosya Tipi</div>
+                    <div class="info-value">${info.file_type || '-'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Dosya Tarihi</div>
+                    <div class="info-value">${info.file_date ? new Date(info.file_date).toLocaleDateString('tr-TR') : '-'}</div>
+                </div>
+            `;
+
+            // Totals
+            const fileTotals = document.getElementById('fileTotals');
+            const totals = data.totals;
+            const currency = info.currency || '';
+            fileTotals.innerHTML = `
+                <div class="total-card">
+                    <div class="total-value">${totals.documents}</div>
+                    <div class="total-label">Toplam Belge</div>
+                </div>
+                <div class="total-card">
+                    <div class="total-value">${formatCurrency(totals.fare, currency)}</div>
+                    <div class="total-label">Toplam Ucret</div>
+                </div>
+                <div class="total-card">
+                    <div class="total-value">${formatCurrency(totals.tax, currency)}</div>
+                    <div class="total-label">Toplam Vergi</div>
+                </div>
+                <div class="total-card">
+                    <div class="total-value">${formatCurrency(totals.total, currency)}</div>
+                    <div class="total-label">Genel Toplam</div>
+                </div>
+                <div class="total-card">
+                    <div class="total-value">${formatCurrency(totals.net_remit, currency)}</div>
+                    <div class="total-label">Net Havale</div>
+                </div>
+            `;
+
+            // Agents
+            const agentsList = document.getElementById('agentsList');
+            if (data.agents && data.agents.length > 0) {
+                agentsList.innerHTML = data.agents.map((agent, idx) => `
+                    <div class="agent-card">
+                        <div class="agent-header" onclick="toggleAgent(${idx})">
+                            <div class="agent-info">
+                                <h4>${agent.iata_number} - ${agent.name}</h4>
+                                <span>${agent.city}</span>
+                            </div>
+                            <div class="agent-total">
+                                <div class="amount">${formatCurrency(agent.totals.total, currency)}</div>
+                                <div class="count">${agent.documents.length} belge</div>
+                            </div>
+                        </div>
+                        <div class="agent-documents" id="agent-${idx}">
+                            ${renderDocumentsTable(agent.documents, currency)}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                agentsList.innerHTML = '<p style="color: #888; padding: 20px;">Acente bilgisi bulunamadi</p>';
+            }
+        }
+
+        function renderDocumentsTable(documents, currency) {
+            if (!documents || documents.length === 0) {
+                return '<p style="color: #888; padding: 10px;">Belge bulunamadi</p>';
+            }
+
+            return `
+                <table class="document-table">
+                    <thead>
+                        <tr>
+                            <th>Belge No</th>
+                            <th>Tip</th>
+                            <th>Yolcu</th>
+                            <th>Tarih</th>
+                            <th>Rota</th>
+                            <th>Ucret</th>
+                            <th>Vergi</th>
+                            <th>Toplam</th>
+                            <th>Odeme</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${documents.map(doc => `
+                            <tr>
+                                <td>${doc.document_number}</td>
+                                <td><span class="badge badge-${doc.transaction_code.toLowerCase()}">${doc.transaction_code}</span></td>
+                                <td>${doc.passenger.name}<br><small style="color:#888">${doc.passenger.type}</small></td>
+                                <td>${doc.issue_date ? new Date(doc.issue_date).toLocaleDateString('tr-TR') : '-'}</td>
+                                <td class="itinerary">${getItinerary(doc)}</td>
+                                <td>${formatCurrency(doc.amounts.fare, currency)}</td>
+                                <td>${formatCurrency(doc.amounts.tax, currency)}</td>
+                                <td><strong>${formatCurrency(doc.amounts.total, currency)}</strong></td>
+                                <td>${doc.payment.type} ${doc.payment.card_type}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function getItinerary(doc) {
+            if (!doc.itinerary || !doc.itinerary.segments || doc.itinerary.segments.length === 0) {
+                return doc.itinerary?.origin || '-';
+            }
+            return doc.itinerary.segments.map(s => `${s.origin}-${s.destination}`).join(' / ');
+        }
+
+        function toggleAgent(idx) {
+            const docs = document.getElementById(`agent-${idx}`);
+            docs.classList.toggle('visible');
+        }
+
+        function formatCurrency(value, currency) {
+            if (value === null || value === undefined) return '-';
+            return `${currency} ${value.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        function downloadJSON() {
+            if (!parsedData) return;
+            const blob = new Blob([JSON.stringify(parsedData, null, 2)], { type: 'application/json' });
+            downloadBlob(blob, getBaseName() + '_parsed.json');
+        }
+
+        function downloadCSV() {
+            if (!currentFile) return;
+            const formData = new FormData();
+            formData.append('file', currentFile);
+
+            fetch('/parse/csv', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                downloadBlob(blob, getBaseName() + '_parsed.csv');
+            });
+        }
+
+        function downloadReport() {
+            if (!currentFile) return;
+            const formData = new FormData();
+            formData.append('file', currentFile);
+
+            fetch('/parse/report', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(text => {
+                const blob = new Blob([text], { type: 'text/plain' });
+                downloadBlob(blob, getBaseName() + '_report.txt');
+            });
+        }
+
+        function getBaseName() {
+            if (!currentFile) return 'export';
+            return currentFile.name.replace(/\.[^/.]+$/, '');
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function resetParser() {
+            parsedData = null;
+            currentFile = null;
+            fileInput.value = '';
+            results.classList.remove('visible');
+            hideError();
+        }
+    </script>
+</body>
+</html>
