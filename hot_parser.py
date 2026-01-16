@@ -417,14 +417,18 @@ class HOTParser:
 
             hot_file.raw_records.append(parsed)
 
-            # Process based on record type
-            if record_id == 'BFH01':
+            # Get the spec key for processing
+            spec_key = parsed.get('_spec_key', record_id)
+            prefix3 = record_id[:3]
+
+            # Process based on record type (using prefix matching)
+            if prefix3 == 'BFH':
                 self._process_file_header(hot_file, parsed)
 
-            elif record_id == 'BCH02':
+            elif prefix3 == 'BCH':
                 self._process_billing_header(hot_file, parsed)
 
-            elif record_id == 'BOH03':
+            elif prefix3 == 'BOH':
                 # Save previous agent
                 if current_document and current_agent:
                     current_agent.documents.append(current_document)
@@ -435,51 +439,56 @@ class HOTParser:
                 current_agent = Agent()
                 self._process_office_header(current_agent, parsed)
 
-            elif record_id == 'BKT06':
+            elif prefix3 == 'BKT':
                 # Transaction header - can be used for grouping
                 pass
 
-            elif record_id == 'BKS24':
-                # New document - save previous if exists
-                if current_document and current_agent:
-                    current_agent.documents.append(current_document)
-                current_document = TicketDocument()
-                self._process_document_id(current_document, parsed)
+            elif prefix3 == 'BKS':
+                # Determine BKS subtype from spec_key or content
+                if spec_key == 'BKS24' or self._is_document_record(parsed):
+                    # New document - save previous if exists
+                    if current_document and current_agent:
+                        current_agent.documents.append(current_document)
+                    current_document = TicketDocument()
+                    self._process_document_id(current_document, parsed)
+                elif spec_key == 'BKS30' and current_document:
+                    self._process_amounts(current_document, parsed)
+                elif spec_key == 'BKS31' and current_document:
+                    self._process_tax(current_document, parsed)
+                elif spec_key == 'BKS39' and current_document:
+                    self._process_commission(current_document, parsed)
+                elif current_document:
+                    # Try to auto-detect record type based on content
+                    self._process_auto_bks(current_document, parsed)
 
-            elif record_id == 'BKS30' and current_document:
-                self._process_amounts(current_document, parsed)
-
-            elif record_id == 'BKS31' and current_document:
-                self._process_tax(current_document, parsed)
-
-            elif record_id == 'BKS39' and current_document:
-                self._process_commission(current_document, parsed)
-
-            elif record_id == 'BKI63' and current_document:
+            elif prefix3 == 'BKI' and current_document:
                 self._process_segment(current_document, parsed)
 
-            elif record_id == 'BAR64' and current_document:
+            elif prefix3 == 'BAR' and current_document:
+                # Could be passenger (BAR64) or FOP (BAR66)
                 self._process_passenger(current_document, parsed)
 
-            elif record_id == 'BKP84' and current_document:
+            elif prefix3 == 'BKP' and current_document:
                 self._process_payment(current_document, parsed)
 
-            elif record_id == 'BOT93':
-                # Transaction totals - informational
-                pass
+            elif prefix3 == 'BKF' and current_document:
+                # Fare calculation - treat like amounts if no amounts yet
+                if current_document.total_amount == 0:
+                    self._process_amounts(current_document, parsed)
 
-            elif record_id == 'BOT94' and current_agent:
-                # Save last document before processing totals
-                if current_document:
-                    current_agent.documents.append(current_document)
-                    current_document = None
-                self._process_office_totals(current_agent, parsed)
+            elif prefix3 == 'BOT':
+                if current_agent:
+                    # Save last document before processing totals
+                    if current_document:
+                        current_agent.documents.append(current_document)
+                        current_document = None
+                    self._process_office_totals(current_agent, parsed)
 
-            elif record_id == 'BCT95':
+            elif prefix3 == 'BCT':
                 # Billing analysis totals - informational
                 pass
 
-            elif record_id == 'BFT99':
+            elif prefix3 == 'BFT':
                 # Save last agent before processing file totals
                 if current_document and current_agent:
                     current_agent.documents.append(current_document)
@@ -497,14 +506,60 @@ class HOTParser:
 
         return hot_file
 
+    # Mapping from record prefix to spec key
+    RECORD_PREFIX_MAP = {
+        'BFH': 'BFH01',  # File Header
+        'BCH': 'BCH02',  # Billing Analysis Header
+        'BOH': 'BOH03',  # Office Header
+        'BKT': 'BKT06',  # Transaction Header
+        'BKS24': 'BKS24',  # Document ID (check full 5 chars first)
+        'BKS30': 'BKS30',  # Amounts
+        'BKS31': 'BKS31',  # Tax
+        'BKS39': 'BKS39',  # Commission
+        'BKI': 'BKI63',  # Itinerary
+        'BAR64': 'BAR64',  # Passenger
+        'BAR66': 'BAR66',  # FOP Detail
+        'BAR': 'BAR64',  # Default BAR to passenger
+        'BKP': 'BKP84',  # Payment
+        'BKF': 'BKS30',  # Fare record - treat like amounts
+        'BOT93': 'BOT93',  # Transaction Totals
+        'BOT94': 'BOT94',  # Office Totals
+        'BOT': 'BOT94',  # Default BOT to office totals
+        'BCT': 'BCT95',  # Billing Totals
+        'BFT': 'BFT99',  # File Totals
+    }
+
+    def _get_spec_key(self, record_id: str) -> Optional[str]:
+        """Get the specification key for a record ID using prefix matching"""
+        # First try exact match
+        if record_id in RECORD_SPECS:
+            return record_id
+
+        # Try full 5-char match in prefix map
+        if record_id in self.RECORD_PREFIX_MAP:
+            return self.RECORD_PREFIX_MAP[record_id]
+
+        # Try 3-char prefix match
+        prefix3 = record_id[:3]
+        if prefix3 in self.RECORD_PREFIX_MAP:
+            return self.RECORD_PREFIX_MAP[prefix3]
+
+        # Special handling for BKS records - try to detect type from content
+        if prefix3 == 'BKS':
+            # Default to BKS24 for document records
+            return 'BKS24'
+
+        return None
+
     def _parse_record(self, line: str, record_id: str) -> Optional[Dict[str, Any]]:
         """Parse a single record line based on its specification"""
-        if record_id not in RECORD_SPECS:
+        spec_key = self._get_spec_key(record_id)
+        if spec_key is None or spec_key not in RECORD_SPECS:
             return None
 
-        result = {'_record_id': record_id, '_raw': line}
+        result = {'_record_id': record_id, '_spec_key': spec_key, '_raw': line}
 
-        for spec in RECORD_SPECS[record_id]:
+        for spec in RECORD_SPECS[spec_key]:
             start = spec.start - 1  # Convert to 0-indexed
             end = start + spec.length
             raw_value = line[start:end] if end <= len(line) else line[start:]
@@ -518,6 +573,42 @@ class HOTParser:
                 result[spec.name] = raw_value.strip()
 
         return result
+
+    def _is_document_record(self, parsed: Dict) -> bool:
+        """Check if a BKS record is a document identification record"""
+        # Check for document number pattern (typically has airline code + serial)
+        doc_num = parsed.get('document_number', '')
+        trans_code = parsed.get('transaction_code', '')
+        # Document records usually have TKTT, RFND, EXCH, CANX etc
+        if trans_code in ('TKTT', 'RFND', 'EXCH', 'CANX', 'ACMA', 'ADMA'):
+            return True
+        # Check if document number looks like a ticket number
+        if doc_num and len(doc_num.strip()) >= 10:
+            return True
+        return False
+
+    def _process_auto_bks(self, doc: 'TicketDocument', parsed: Dict):
+        """Auto-detect and process BKS record based on content"""
+        raw = parsed.get('_raw', '')
+
+        # Try to detect record type from content patterns
+        # If we see currency code at position 13-15, it's likely amounts (BKS30)
+        if len(raw) > 15:
+            potential_currency = raw[12:15].strip()
+            if potential_currency.isalpha() and len(potential_currency) == 3:
+                # Likely BKS30 (amounts)
+                self._process_amounts(doc, parsed)
+                return
+
+        # If we see tax codes, it's BKS31
+        if len(raw) > 16:
+            potential_tax = raw[13:15].strip()
+            if potential_tax in ('YQ', 'YR', 'TR', 'DE', 'GB', 'US', 'FR'):
+                self._process_tax(doc, parsed)
+                return
+
+        # Default: try amounts
+        doc.raw_records.append(parsed)
 
     def _parse_signed_numeric(self, value: str) -> Decimal:
         """Parse signed numeric field with EBCDIC overpunch convention"""
